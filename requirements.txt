@@ -1,0 +1,4 @@
+scrapy
+mongoengine
+python-dotenv
+redis
