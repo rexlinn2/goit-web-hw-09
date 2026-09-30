@@ -12,7 +12,9 @@ class QuotesSpider(scrapy.Spider):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
         self.quotes = []
+
         self.authors = {}
 
     def parse(self, response):
@@ -28,18 +30,26 @@ class QuotesSpider(scrapy.Spider):
                 "quote": quote_text,
             })
 
-            if author_url and author_url not in self.authors:
-                self.authors[author_url] = {
+            full_author_url = (
+                response.urljoin(author_url)
+                if author_url
+                else None
+            )
+
+            if author_name and author_name not in self.authors:
+                self.authors[author_name] = {
                     "fullname": author_name,
                     "born_date": "",
                     "born_location": "",
                     "description": "",
                 }
 
-                yield response.follow(
-                    author_url,
-                    callback=self.parse_author,
-                )
+                if full_author_url:
+                    yield response.follow(
+                        full_author_url,
+                        callback=self.parse_author,
+                        meta={"author_name": author_name},
+                    )
 
         next_page = response.css("li.next a::attr(href)").get()
 
@@ -47,31 +57,63 @@ class QuotesSpider(scrapy.Spider):
             yield response.follow(next_page, callback=self.parse)
 
     def parse_author(self, response):
-        author_url = response.url
+        author_name = response.meta.get("author_name")
 
-        if author_url in self.authors:
-            self.authors[author_url]["born_date"] = (
-                response.css("span.author-born-date::text").get("") or ""
-            )
-            self.authors[author_url]["born_location"] = (
-                response.css("span.author-born-location::text").get("") or ""
-            )
-            self.authors[author_url]["description"] = (
-                response.css("div.author-description::text").get("") or ""
-            ).strip()
+        if not author_name or author_name not in self.authors:
+            return
+
+        self.authors[author_name]["born_date"] = (
+            response.css("span.author-born-date::text").get("") or ""
+        ).strip()
+
+        self.authors[author_name]["born_location"] = (
+            response.css("span.author-born-location::text").get("") or ""
+        ).strip()
+
+        self.authors[author_name]["description"] = (
+            response.css("div.author-description::text").get("") or ""
+        ).strip()
 
     def closed(self, reason):
         base_path = Path(__file__).resolve().parent
+
         authors = list(self.authors.values())
 
-        with open(base_path / "authors.json", "w", encoding="utf-8") as file:
-            json.dump(authors, file, ensure_ascii=False, indent=4)
+        with open(
+            base_path / "authors.json",
+            "w",
+            encoding="utf-8",
+        ) as file:
+            json.dump(
+                authors,
+                file,
+                ensure_ascii=False,
+                indent=4,
+            )
 
-        with open(base_path / "quotes.json", "w", encoding="utf-8") as file:
-            json.dump(self.quotes, file, ensure_ascii=False, indent=4)
+        with open(
+            base_path / "quotes.json",
+            "w",
+            encoding="utf-8",
+        ) as file:
+            json.dump(
+                self.quotes,
+                file,
+                ensure_ascii=False,
+                indent=4,
+            )
 
-        with open(base_path / "qoutes.json", "w", encoding="utf-8") as file:
-            json.dump(self.quotes, file, ensure_ascii=False, indent=4)
+        with open(
+            base_path / "qoutes.json",
+            "w",
+            encoding="utf-8",
+        ) as file:
+            json.dump(
+                self.quotes,
+                file,
+                ensure_ascii=False,
+                indent=4,
+            )
 
         print()
         print("=" * 50)
@@ -96,6 +138,7 @@ def main():
     )
 
     process.crawl(QuotesSpider)
+
     process.start()
 
 
